@@ -7,8 +7,8 @@ import transformations as tf
 import math
 import threading
 import queue
-from pid import PID
 from targeter import TargetDefine
+from fuzzy import FuzzyControl  # 引入模糊控制
 
 # Edge to screen ratio (for filtering)
 EDGE = 0.02
@@ -65,9 +65,9 @@ class Camera():
         self.MarkerTarget = TargetDefine()
 
         # controller
-        self.yaw_pid = PID(0.1, 0.00001, 0.001)
-        self.v_pid = PID(0.5, 0.00001, 0.0001)
-        self.vz_pid = PID(0.8, 0.00001, 0.0001)
+        self.yaw_fuzzy = FuzzyControl()
+        self.v_fuzzy = FuzzyControl()
+        self.vz_fuzzy = FuzzyControl()
         self.TargetPos = np.array([[0., 0., 1., 0.]])
 
         # for aruco markers
@@ -76,9 +76,9 @@ class Camera():
         self.getFirst = True
 
     # Calibrate camera
-    def calibrator(self,frame):
+    def calibrator(self, frame):
         if self.calib==False:
-            gray = cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             # find the chessboard corners
             ret, corners = cv2.findChessboardCorners(gray, (9,6),None)
         
@@ -268,15 +268,15 @@ class Camera():
             
             # yaw speed control
             err_yaw = rvec[0][1] - self.TargetPos[0][3]
-            directions[3] = self.speed/2*self.yaw_pid.control(err_yaw)
+            directions[3] = self.speed/2*self.yaw_fuzzy.control(err_yaw)
 
             # vx, vy, vz speed control
             err_x = self.TargetPos[0][0] - tvec[0][0]
-            directions[0] = -A*self.v_pid.control(err_x)
+            directions[0] = -A*self.v_fuzzy.control(err_x)
             err_y = self.TargetPos[0][2] - tvec[0][2]
-            directions[1] = -A*self.v_pid.control(err_y)
+            directions[1] = -A*self.v_fuzzy.control(err_y)
             err_z = self.TargetPos[0][1] - tvec[0][1]
-            directions[2] = A*self.vz_pid.control(err_z)
+            directions[2] = A*self.vz_fuzzy.control(err_z)
 
             # aligned to setpoint
             if abs(err_x) < ERROR and abs(err_y) < ERROR and abs(err_z) < ERROR and abs(err_yaw) < 5:
@@ -299,10 +299,10 @@ class Camera():
                         self.changeObjective(seen_id_list, tvecs)
                         if not self.findNew:
                             self.TargetPos = self.MarkerTarget.changeTarget(self.TargetID)
-                            # reset PIDs
-                            self.yaw_pid.reset()
-                            self.v_pid.reset()
-                            self.vz_pid.reset()
+                            # reset fuzzy controllers
+                            self.yaw_fuzzy.reset()
+                            self.v_fuzzy.reset()
+                            self.vz_fuzzy.reset()
                             print("Target changed to "+str(self.TargetID))
                         else:
                             print("Searching for new marker...")    
@@ -316,9 +316,9 @@ class Camera():
     def resetNavigators(self):
         self.beenThere = []
         self.TargetID = 1
-        self.yaw_pid.reset()
-        self.v_pid.reset()
-        self.vz_pid.reset()
+        self.yaw_fuzzy.reset()
+        self.v_fuzzy.reset()
+        self.vz_fuzzy.reset()
         self.t_lost = 0.
         self.t_inPos = 0.
         self.last_marker_pos = 1.

@@ -1,5 +1,3 @@
-import sys
-sys.path.append('/home/ros/anaconda3/envs/aruco/lib/python3.8/site-packages/')
 from djitellopy import Tello
 import cv2
 import pygame
@@ -8,24 +6,18 @@ import numpy as np
 import time
 import queue
 import threading
-from cam_class_fuzzy import Camera
+from cam_class import Camera
 from timeit import default_timer as timer
 from video_writer import WriteVideo
-import rclpy
-from rclpy.node import Node
-from std_msgs.msg import String, Int32
-from sensor_msgs.msg import Image
-from cv_bridge import CvBridge
-
 
 # Speed of the drone
 S = 60
 # Speed for autonomous navigation
-S_prog = 150
+S_prog = 15
 # Frames per second of the pygame window display
 FPS = 30
 
-class FrontEnd(Node):
+class FrontEnd(object):
     """ Maintains the Tello display and moves it through the keyboard keys.
         Press escape key to quit.
         The controls are:
@@ -37,24 +29,17 @@ class FrontEnd(Node):
     """
 
     def __init__(self):
-        super().__init__('frontend')
-        
-        # ROS 2 publishers
-        self.image_pub = self.create_publisher(Image, 'tello_image', 10)
-        self.battery_pub = self.create_publisher(Int32, 'tello_battery', 10)
-        self.cv_bridge = CvBridge()
-
         # Init pygame
         pygame.init()
 
-        # Create pygame window
+        # Creat pygame window
         pygame.display.set_caption("Tello video stream")
         self.width = 640
         self.height = 480
         self.screen = pygame.display.set_mode([self.width, self.height])
 
-        # Create queue for data communications
-        self.data_queue = queue.Queue()
+        # create queue for data communications
+        self.data_queue=queue.Queue()
 
         # Init Tello object that interacts with the Tello drone
         self.tello = Tello(self.data_queue)
@@ -71,7 +56,7 @@ class FrontEnd(Node):
         self.angles = [0., 0., 0., 0.]
 
         # Direction queue for navigation
-        self.dir_queue = queue.Queue()
+        self.dir_queue=queue.Queue()
         self.dir_queue.queue.clear()
 
         # Bool variables for setting functions
@@ -108,6 +93,7 @@ class FrontEnd(Node):
         pygame.time.set_timer(USEREVENT + 1, 50)
 
     def run(self):
+
         if not self.tello.connect():
             print("Tello not connected")
             return
@@ -130,7 +116,7 @@ class FrontEnd(Node):
 
         should_stop = False
         while not should_stop:
-            img = cv2.resize(frame_read.frame, (960, 720))
+            img=cv2.resize(frame_read.frame, (960,720))
 
             # Read from drone state queue
             if not self.data_queue.empty():
@@ -138,7 +124,7 @@ class FrontEnd(Node):
                 self.data_queue.queue.clear()
                 self.battery = bat
                 self.angles_tof = [pitch, roll, yaw, tof]
-                self.publish_battery(self.battery)
+                #print([pitch, roll, yaw, tof])
 
             # Calibrate drone camera
             if self.calibrate:
@@ -149,7 +135,7 @@ class FrontEnd(Node):
 
             # Reset measurements
             if self.resetPoints:
-                self.resetPoints = False
+                self.resetPoints=False
 
             for event in pygame.event.get():
                 if event.type == USEREVENT + 1:
@@ -171,7 +157,7 @@ class FrontEnd(Node):
             # Save image on 'M' press
             if self.save:
                 timestr = time.strftime("%Y%m%d_%H%M%S")
-                cv2.imwrite("images/" + timestr + ".jpg", img)
+                cv2.imwrite("images/"+timestr+".jpg", img)
                 self.save = False
 
             # Navigation started, points and video capture
@@ -181,16 +167,13 @@ class FrontEnd(Node):
             # Write battery percentage
             img = self.cam.writeBattery(img, self.battery)
 
-            img = cv2.resize(img, (640, 480))
+            img=cv2.resize(img, (640,480))
             
-            # Publish image to ROS topic
-            self.publish_image(img)
-
             # Resize pyGame window
             if (img.shape[1] != self.width) or (img.shape[0] != self.height):
                 self.width = img.shape[1]
                 self.height = img.shape[0]
-                self.screen = pygame.display.set_mode((self.width, self.height))
+                self.screen=pygame.display.set_mode((self.width, self.height))
             
             self.screen.fill([0, 0, 0])
             frame = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -253,7 +236,7 @@ class FrontEnd(Node):
                 self.calibrate = True
         elif key == pygame.K_c: # get aruco marker points
             if self.getPoints:
-                self.getPoints = False
+                self.getPoints=False
             else:
                 self.getPoints = True
                 self.resetPoints = True
@@ -281,25 +264,13 @@ class FrontEnd(Node):
                 # Control tello manually
                 self.tello.send_rc_control(self.left_right_velocity, self.for_back_velocity, self.up_down_velocity,
                                            self.yaw_velocity)
-    
-    def publish_image(self, img):
-        """Publish the current image to ROS topic."""
-        ros_image = self.cv_bridge.cv2_to_imgmsg(img, encoding="bgr8")
-        self.image_pub.publish(ros_image)
-
-    def publish_battery(self, battery):
-        """Publish the current battery level to ROS topic."""
-        battery_msg = Int32()
-        battery_msg.data = battery
-        self.battery_pub.publish(battery_msg)
 
 def main():
-    rclpy.init()
     frontend = FrontEnd()
 
     # run frontend
     frontend.run()
-    rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()

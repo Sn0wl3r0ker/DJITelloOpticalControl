@@ -197,7 +197,7 @@ class Tello:
                 self.LOGGER.warning('Timeout exceed on command ' + command)
                 return False
 
-        response = self.response.decode('utf-8').rstrip("\r\n")
+        response = self.response.decode('iso-8859-1').rstrip("\r\n")
 
         self.LOGGER.info('Response: ' + response)
 
